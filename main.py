@@ -102,7 +102,7 @@ def google_fact_checking_claim(query):
             is_real = False
         else:
             is_real = True
-            
+
         return is_real
     else:
         print("Sem resultados")
@@ -110,13 +110,33 @@ def google_fact_checking_claim(query):
 
 
 
+def search_on_web(query):
+    url = "https://google.serper.dev/search"
+
+    payload = {
+        "q": query,
+        "hl": "pt",
+        "num": 10
+    }
+
+    headers = {
+        "X-API-KEY": os.getenv("SERPER_API_KEY"),
+        "Content-Type": "application/json"
+    }
+
+    response = requests.request("POST", url, headers=headers, json=payload)
+    
+    print(response.json())
+
 
 if __name__ == "__main__":
     #print(paddleOCR_analyze(cartaz))
     #print(tesseract_analyze(cartaz))
     #print(getFinalClaim())
-    print(google_fact_checking_claim("vacinas da covid realmente funcionam"))
-    
+
+    #print(google_fact_checking_claim(getFinalClaim()))
+    search_on_web(getFinalClaim())
+
 
 
 
