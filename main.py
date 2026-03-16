@@ -22,7 +22,6 @@ def paddleOCR_analyze(img):
     corrected_words = [spell.correction(word) or word if word in words_unknow else word for word in words]
     paddleOCR_claim = " ".join(corrected_words)
     
-    #print("PaddleOCR Result:", paddleOCR_claim)
     return paddleOCR_claim
 
 
@@ -34,11 +33,8 @@ def tesseract_analyze(img):
     corrected_words = [spell.correction(word) or word if word in words_unknow else word for word in words]
     tesseract_text = " ".join(corrected_words)
 
-    #print("Tesseract OCR Result:", tesseract_text)
     return tesseract_text
     
-
-
 
 
 def check_claim_with_more_correct_words(text):
@@ -62,8 +58,11 @@ def getFinalClaim():
 
 
 
-
 def google_fact_checking_claim(query):
+    is_real = None
+    qty_is_fake = 0
+    qty_is_real = 0
+
     url = "https://factchecktools.googleapis.com/v1alpha1/claims:search"
 
     params = {
@@ -81,26 +80,42 @@ def google_fact_checking_claim(query):
     data = response.json()
 
     if "claims" in data and data["claims"]:
-        """
         for claim in data["claims"]:
             reviews = claim["claimReview"]
             if reviews:
-                print(reviews[0]["textualRating"])
-
-                # Bota um switch case aqui pra ver se é 'Enganoso', 'Verdadeiro', 'Falso', etc
+                match reviews[0]["textualRating"]:
+                    case "Falso":
+                        is_real = False
+                        qty_is_fake += 1
+                    case "Enganoso":
+                        is_real = False
+                        qty_is_fake += 1
+                    case "Verdadeiro":
+                        is_real = True
+                        qty_is_real += 1
+                    # Falta um default aqui pra caso não seja nenhum dos valores listados acima
             else:
-                return False
-                """
-        print(data)
+                #return "Não foi possível realizar a análise/***DÚVIDA***"
+                return None
+        
+        if qty_is_fake > qty_is_real:
+            is_real = False
+        else:
+            is_real = True
+            
+        return is_real
     else:
-        print("Sem resultados!")
+        print("Sem resultados")
+        return None
+
+
 
 
 if __name__ == "__main__":
     #print(paddleOCR_analyze(cartaz))
     #print(tesseract_analyze(cartaz))
-    print(getFinalClaim())
-    google_fact_checking_claim(getFinalClaim())
+    #print(getFinalClaim())
+    print(google_fact_checking_claim("vacinas da covid realmente funcionam"))
     
 
 
