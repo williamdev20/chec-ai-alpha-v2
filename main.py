@@ -4,11 +4,14 @@ import pytesseract
 import requests
 import os
 from dotenv import load_dotenv
+from bs4 import BeautifulSoup
+#from sentence_transformers import SentenceTransformer # Ta dando erro no import pq precisa do Pytorch em uma versão e eu to em uma desatualizada
 
 load_dotenv()
 
 ocr = PaddleOCR(use_angle_cls=True, lang="pt", show_log=False)
 spell = SpellChecker(language="pt")
+#model = SentenceTransformer("all-MiniLM-L6-v2")
 
 cartaz = "assets/fake-news-cartaz.png"
 
@@ -34,7 +37,7 @@ def tesseract_analyze(img):
     tesseract_text = " ".join(corrected_words)
 
     return tesseract_text
-    
+
 
 
 def check_claim_with_more_correct_words(text):
@@ -42,6 +45,7 @@ def check_claim_with_more_correct_words(text):
     unknow_word = spell.unknown(words)
 
     return len(unknow_word)
+
 
 
 def getFinalClaim():
@@ -55,6 +59,16 @@ def getFinalClaim():
         final_claim = tesseract_claim
 
     return final_claim
+
+
+
+"""
+def get_paddleOCR_embedding(text):
+    sentence = text
+    embedding = model.encode(sentence)
+
+    return embedding.shape
+""" 
 
 
 
@@ -124,9 +138,54 @@ def search_on_web(query):
         "Content-Type": "application/json"
     }
 
-    response = requests.request("POST", url, headers=headers, json=payload)
+    headers_scrapping = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+    }
+
+    response = requests.request("POST", url, headers=headers, json=payload) # Quando chegar em casa tirar esse 'verify' pra ver se funciona no Linux
     
-    print(response.json())
+    if response.status_code != 200:
+        print("[ERROR]: Houve erro na requisição da API: ", response.status_code)
+
+
+    data = response.json()
+
+    # Pegar os links #
+    source_links = []
+    scrapping_paragraphs = []
+
+    if data["organic"]:
+        for result in data["organic"]:
+            #print(result["link"])
+            source_links.append(result["link"])
+
+
+    #print(source_links)
+    #print(json.dumps(data, indent=2, ensure_ascii=False))
+
+
+    # Scrapping #
+    for url in source_links:
+        print("================================= URL =================================")
+        try:
+            html = requests.get(url, headers=headers_scrapping, timeout=10, verify=False)
+            soup = BeautifulSoup(html.text, "html.parser")
+
+            if html.status_code != 200:
+                #print(f"[ERROR] Houve um erro ao acessar o site de scrapping: {html.status_code}\n URL negada: {url}")
+                continue
+
+            paragraphs = soup.find_all("p")
+            
+            for paragraph in paragraphs:
+                print(paragraph.get_text(strip=True))
+                scrapping_paragraphs.append(paragraph.get_text(strip=True))
+
+        except Exception as e:
+            print(f"[ERROR]: Houve um erro no scrapping: {e}")
+
+
+    
 
 
 if __name__ == "__main__":
@@ -136,6 +195,7 @@ if __name__ == "__main__":
 
     #print(google_fact_checking_claim(getFinalClaim()))
     search_on_web(getFinalClaim())
+    #print(get_paddleOCR_embedding(paddleOCR_analyze(cartaz)))
 
 
 
