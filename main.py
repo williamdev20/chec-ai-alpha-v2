@@ -5,13 +5,13 @@ import requests
 import os
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
-#from sentence_transformers import SentenceTransformer # Ta dando erro no import pq precisa do Pytorch em uma versão e eu to em uma desatualizada
+from sentence_transformers import SentenceTransformer # Ta dando erro no import pq precisa do Pytorch em uma versão e eu to em uma desatualizada
 
 load_dotenv()
 
 ocr = PaddleOCR(use_angle_cls=True, lang="pt", show_log=False)
 spell = SpellChecker(language="pt")
-#model = SentenceTransformer("all-MiniLM-L6-v2")
+model = SentenceTransformer("all-MiniLM-L6-v2")
 
 cartaz = "assets/fake-news-cartaz.png"
 
@@ -62,13 +62,13 @@ def getFinalClaim():
 
 
 
-"""
-def get_paddleOCR_embedding(text):
+
+def get_final_claim_embedding(text):
     sentence = text
     embedding = model.encode(sentence)
 
-    return embedding.shape
-""" 
+    return embedding
+
 
 
 
@@ -178,14 +178,29 @@ def search_on_web(query):
             paragraphs = soup.find_all("p")
             
             for paragraph in paragraphs:
-                print(paragraph.get_text(strip=True))
+                #print(paragraph.get_text(strip=True))
                 scrapping_paragraphs.append(paragraph.get_text(strip=True))
 
         except Exception as e:
             print(f"[ERROR]: Houve um erro no scrapping: {e}")
 
+    return scrapping_paragraphs
 
     
+def get_scrapping_paragraphs_embedding(paragraphs: list[str]):
+    sentences = []
+    for paragraph in paragraphs:
+        sentences.append(paragraph)
+
+    paragraphs_embedding = model.encode(sentences)[0]
+
+    return paragraphs_embedding
+
+
+def check_poster_with_cosine_similarity(query_embedding, paragraphs_embedding):
+    similarities = model.similarity(query_embedding, paragraphs_embedding)
+
+    return similarities
 
 
 if __name__ == "__main__":
@@ -194,8 +209,9 @@ if __name__ == "__main__":
     #print(getFinalClaim())
 
     #print(google_fact_checking_claim(getFinalClaim()))
-    search_on_web(getFinalClaim())
-    #print(get_paddleOCR_embedding(paddleOCR_analyze(cartaz)))
+    #search_on_web(getFinalClaim())
+    #print(get_final_claim_embedding(getFinalClaim()))
+    print(check_poster_with_cosine_similarity(get_final_claim_embedding(getFinalClaim()), get_scrapping_paragraphs_embedding(search_on_web(getFinalClaim()))))
 
 
 
