@@ -192,14 +192,23 @@ def get_scrapping_paragraphs_embedding(paragraphs: list[str]):
     for paragraph in paragraphs:
         sentences.append(paragraph)
 
-    paragraphs_embedding = model.encode(sentences)[0]
+    paragraphs_embedding = model.encode(sentences)
 
     return paragraphs_embedding
 
 
 def check_poster_with_cosine_similarity(query_embedding, paragraphs_embedding):
     similarities = model.similarity(query_embedding, paragraphs_embedding)
+    # Botar um metodo max aqui pra pegar o valor mais alto dessa lista acima. Daí eu faço um if pra ver se o resultado é confiavel, falso ou se precisa mandar pra IA com base no score do resultado do 'max' no vetor da similaridade de cosseno
+    score = similarities.max().item()
+    top_paragraph = similarities.argmax().item()
 
+    if score >= 0.85:
+        ...
+
+    
+
+    print("SCORE AQUI:", score)
     return similarities
 
 
