@@ -5,13 +5,15 @@ import requests
 import os
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
-from sentence_transformers import SentenceTransformer # Ta dando erro no import pq precisa do Pytorch em uma versão e eu to em uma desatualizada
+from sentence_transformers import SentenceTransformer
+from groq import Groq
 
 load_dotenv()
 
 ocr = PaddleOCR(use_angle_cls=True, lang="pt", show_log=False)
 spell = SpellChecker(language="pt")
 model = SentenceTransformer("all-MiniLM-L6-v2")
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 cartaz = "assets/fake-news-cartaz.png"
 
@@ -99,13 +101,13 @@ def google_fact_checking_claim(query):
             if reviews:
                 match reviews[0]["textualRating"]:
                     case "Falso":
-                        is_real = False
+                        #is_real = False
                         qty_is_fake += 1
                     case "Enganoso":
-                        is_real = False
+                        #is_real = False
                         qty_is_fake += 1
                     case "Verdadeiro":
-                        is_real = True
+                        #is_real = True
                         qty_is_real += 1
                     # Falta um default aqui pra caso não seja nenhum dos valores listados acima
             else:
@@ -119,6 +121,7 @@ def google_fact_checking_claim(query):
 
         return is_real
     else:
+        print("PASSOU PELO GOOGLE FACT CHECK")
         print("Sem resultados")
         return None
 
@@ -186,6 +189,7 @@ def search_on_web(query):
         except Exception as e:
             print(f"[ERROR]: Houve um erro no scrapping: {e}")
 
+    print("PASSOU PELO SCRAPPING")
     return scrapping_paragraphs
 
     
@@ -199,21 +203,74 @@ def get_scrapping_paragraphs_embedding(paragraphs: list[str]):
     return paragraphs_embedding
 
 
-def check_poster_with_cosine_similarity(query_embedding, paragraphs_embedding):
-    is_real = None
+def check_poster_with_cosine_similarity(query_embedding, paragraphs_embedding, paragraphs: list[str]):
     similarities = model.similarity(query_embedding, paragraphs_embedding)
     # Botar um metodo max aqui pra pegar o valor mais alto dessa lista acima. Daí eu faço um if pra ver se o resultado é confiavel, falso ou se precisa mandar pra IA com base no score do resultado do 'max' no vetor da similaridade de cosseno
     score = similarities.max().item()
-    top_paragraph = similarities.argmax().item()
+    top_paragraph_index = int(similarities.argmax().item())
+    top_paragraph = paragraphs[top_paragraph_index]
 
     if score >= 0.85:
-        is_real = True
+        return True
     elif score >= 0.30:
-        is_real = False
+        return False
     else:
-        is_real = None
+        return {"paragraph": top_paragraph}
 
-    return is_real    
+
+
+def check_with_agent(query, top_paragraph):
+    completion = client.chat.completions.create(
+        model="openai/gpt-oss-120b",
+        messages=[
+            {
+                "role": "system",
+                "content": "Você é um agente de IA responsável por checar a veracidade de uma informação retirada de um cartaz para saber se ela se trata de uma fake news ou não. Você receberá uma query (texto/pergunta) e um parágrafo com instrução. Você deve analisar essa query e o parágrafo que foi fornecido e verificar se é uma fake news ou não. Para a confirmação das informações fornecidas, você não deve verificar apenas se o parágrafo concorda com a query, mas sim verificar se a informação do parágrafo é um fato real baseado em conhecimento científico. Se o parágrafo contiver informação falsa, pseudociência ou desinformação, retorne 'FALSE'. Mesmo que o parágrafo concorde com a query, se ambos estiverem errados, retorne 'FALSE'. Só retorne 'TRUE' se a informação for comprovadamente verdadeira. Você dever retornar apenas, e somente apenas, 'TRUE' ou 'FALSE'"
+            },
+            {
+                "role": "user",
+                "content":
+                f"""
+                    Query: {query}. Parágrafo: {top_paragraph}
+
+                    Pergunta:
+                    O parágrafo responde corretamente a query com base no mundo real e em conhecimento científico e conhecimento confiável? É preciso que a informação seja cientificamente correta, e não verificar apenas a semelhança semântica da query e o parágrafo.
+
+                """
+            }
+        ],
+        temperature=0,
+        max_completion_tokens=8192,
+        top_p=1,
+        reasoning_effort="medium",
+        stream=False,
+        stop=None
+    )
+
+    print("PASSOU PELO AGENTE")
+    return completion.choices[0].message.content
+
+
+def check_poster():
+    claim = getFinalClaim()
+
+    google_check_result = google_fact_checking_claim(claim)
+
+    if google_check_result is None:
+        claim_embedding = get_final_claim_embedding(claim)
+        paragraphs = search_on_web(claim)
+        paragraph_embedding = get_scrapping_paragraphs_embedding(paragraphs)
+
+        cosine_similarity_result = check_poster_with_cosine_similarity(claim_embedding, paragraph_embedding, paragraphs)
+
+        if isinstance(cosine_similarity_result, dict):
+            agent_result = check_with_agent(claim, cosine_similarity_result["paragraph"])
+
+            return agent_result
+        else:
+            return cosine_similarity_result
+    else:
+        return google_check_result
 
 
 
@@ -225,7 +282,12 @@ if __name__ == "__main__":
     #print(google_fact_checking_claim(getFinalClaim()))
     #search_on_web(getFinalClaim())
     #print(get_final_claim_embedding(getFinalClaim()))
-    print(check_poster_with_cosine_similarity(get_final_claim_embedding(getFinalClaim()), get_scrapping_paragraphs_embedding(search_on_web(getFinalClaim()))))
+
+
+    #print(check_poster_with_cosine_similarity(get_final_claim_embedding(getFinalClaim()), get_scrapping_paragraphs_embedding(search_on_web(getFinalClaim()))))
+    #check_with_agent(getFinalClaim(), top_paragraph="Chá de erva doce, na verdade, não cura o vírus da dengue")
+
+    print(check_poster())
 
 
 
