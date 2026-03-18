@@ -125,6 +125,8 @@ def google_fact_checking_claim(query):
 
 
 def search_on_web(query):
+
+
     url = "https://google.serper.dev/search"
 
     payload = {
@@ -166,7 +168,7 @@ def search_on_web(query):
 
     # Scrapping #
     for url in source_links:
-        print("================================= URL =================================")
+        #print("================================= URL =================================")
         try:
             html = requests.get(url, headers=headers_scrapping, timeout=10, verify=False)
             soup = BeautifulSoup(html.text, "html.parser")
@@ -198,18 +200,21 @@ def get_scrapping_paragraphs_embedding(paragraphs: list[str]):
 
 
 def check_poster_with_cosine_similarity(query_embedding, paragraphs_embedding):
+    is_real = None
     similarities = model.similarity(query_embedding, paragraphs_embedding)
     # Botar um metodo max aqui pra pegar o valor mais alto dessa lista acima. Daí eu faço um if pra ver se o resultado é confiavel, falso ou se precisa mandar pra IA com base no score do resultado do 'max' no vetor da similaridade de cosseno
     score = similarities.max().item()
     top_paragraph = similarities.argmax().item()
 
     if score >= 0.85:
-        ...
+        is_real = True
+    elif score >= 0.30:
+        is_real = False
+    else:
+        is_real = None
 
-    
+    return is_real    
 
-    print("SCORE AQUI:", score)
-    return similarities
 
 
 if __name__ == "__main__":
